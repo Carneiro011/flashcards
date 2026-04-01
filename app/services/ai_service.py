@@ -2,120 +2,94 @@
 
 import os
 import json
-import google.generativeai as genai
 from typing import List
+from google import genai
+
 from app.models.flashcard import Flashcard, TipoFlashcard
 
 
 class AIFlashcardService:
-    """
-    Gera flashcards usando o Google Gemini API.
-    
-    Por que Gemini e não OpenAI?
-    - Tem tier gratuito generoso (ideal para estudantes)
-    - Gemini 1.5 Flash é rápido e eficiente para tarefas de texto
-    - API em Python é simples e bem documentada
-    
-    Configuração necessária:
-    1. Criar conta em aistudio.google.com
-    2. Gerar uma API Key
-    3. Adicionar ao arquivo .env: GEMINI_API_KEY=sua_chave_aqui
-    """
 
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY", "").strip()
+
         if not api_key:
-            raise EnvironmentError(
-                "GEMINI_API_KEY não encontrada. "
-                "Adicione ao arquivo .env: GEMINI_API_KEY=sua_chave"
-            )
-        genai.configure(api_key=api_key)
-        # Usamos Flash: mais rápido e gratuito, ideal para MVP
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+            raise EnvironmentError("GEMINI_API_KEY não encontrada.")
+
+        print(f"[AIService] Inicializando com chave: {api_key[:8]}...")
+        self.client = genai.Client(api_key=api_key)
+
+        # 🔥 modelo mais seguro hoje
+        self.model_name = "gemini-2.0-flash"
 
     def _montar_prompt(self, texto: str) -> str:
-        """
-        Engenharia de prompt: instrução precisa para o modelo.
-        
-        Boas práticas de prompt engineering:
-        1. Papel claro ("Você é um professor...")
-        2. Tarefa específica (gerar exatamente 5 flashcards)
-        3. Formato de saída definido (JSON)
-        4. Exemplos inline (few-shot)
-        5. Restrição de formato (APENAS JSON)
-        """
         return f"""
-Você é um professor universitário especialista em criar materiais de estudo.
+Gere EXATAMENTE 6 flashcards em JSON.
 
-Sua tarefa: analisar o texto abaixo e gerar EXATAMENTE 5 flashcards educativos.
+Use tipos:
+- verdadeiro_falso
+- preencha_lacuna
+- pergunta_resposta
 
-REGRAS OBRIGATÓRIAS:
-1. Gere flashcards dos 3 tipos: verdadeiro_falso, preencha_lacuna, pergunta_resposta
-2. Baseie TODOS os flashcards no conteúdo do texto fornecido
-3. Retorne APENAS JSON válido, sem texto antes ou depois
-4. Siga EXATAMENTE o schema abaixo
-
-SCHEMA JSON:
+Formato:
 {{
   "flashcards": [
     {{
-      "tipo": "verdadeiro_falso" | "preencha_lacuna" | "pergunta_resposta",
-      "frente": "texto da pergunta/afirmação/lacuna",
-      "verso": "resposta correta",
-      "conceito": "conceito principal abordado",
-      "dica": "dica de estudo (1 frase)"
+      "tipo": "...",
+      "frente": "...",
+      "verso": "...",
+      "conceito": "...",
+      "dica": "..."
     }}
   ]
 }}
 
-TEXTO PARA ANÁLISE:
+Texto:
 {texto}
 
-Lembre-se: retorne SOMENTE o JSON. Nada mais.
+Retorne SOMENTE JSON.
 """
 
-    def gerar_flashcards(self, texto: str) -> List[Flashcard]:
-        """
-        Chama a API do Gemini e converte a resposta em objetos Flashcard.
-        
-        Fluxo:
-        1. Monta o prompt com o texto do usuário
-        2. Envia para a API
-        3. Faz parse do JSON retornado
-        4. Converte cada item em objeto Flashcard
-        5. Retorna a lista
-        
-        Tratamento de erros:
-        - json.JSONDecodeError: modelo retornou algo que não é JSON válido
-        - KeyError: JSON válido mas sem os campos esperados
-        """
-        prompt = self._montar_prompt(texto)
+def gerar_flashcards(self, texto: str, max_cards: int = 5):
+    sentencas = self.extrair_sentencas(texto)
 
-        # Chamada à API — esta linha é assíncrona internamente no Gemini
-        response = self.model.generate_content(prompt)
+    if not sentencas:
+        raise ValueError("Texto inválido.")
 
-        # O modelo às vezes envolve JSON em ```json ... ```
-        # Este bloco limpa isso antes do parse
-        texto_resposta = response.text.strip()
-        if texto_resposta.startswith("```"):
-            # Remove delimitadores de código markdown
-            linhas = texto_resposta.split('\n')
-            texto_resposta = '\n'.join(linhas[1:-1])
+    flashcards = []
+    tipos = list(TipoFlashcard)
 
-        try:
-            dados = json.loads(texto_resposta)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"A IA retornou formato inválido: {e}\nResposta: {texto_resposta[:200]}")
+    i = 0
+    while len(flashcards) < max_cards:
+        sentenca = sentencas[i % len(sentencas)]
+        tipo = tipos[i % len(tipos)]
 
-        flashcards = []
-        for item in dados.get("flashcards", []):
-            flashcard = Flashcard(
-                tipo=TipoFlashcard(item["tipo"]),   # Enum valida o valor
-                frente=item["frente"],
-                verso=item["verso"],
-                conceito=item["conceito"],
-                dica=item.get("dica"),              # .get() = None se ausente
+        conceito = self.extrair_conceito(sentenca)
+
+        if tipo == TipoFlashcard.VERDADEIRO_FALSO:
+            frente = f"É correto afirmar que: {sentenca}?"
+            verso = "Verdadeiro."
+            dica = f"Revise: {conceito}"
+
+        elif tipo == TipoFlashcard.PREENCHA_LACUNA:
+            frente, verso = self.criar_lacuna(sentenca, conceito)
+            dica = f"{len(conceito)} letras"
+
+        else:
+            frente = f"Explique: {conceito}"
+            verso = sentenca
+            dica = "Baseie-se no texto."
+
+        flashcards.append(
+            Flashcard(
+                tipo=tipo,
+                frente=frente,
+                verso=verso,
+                conceito=conceito,
+                dica=dica
             )
-            flashcards.append(flashcard)
+        )
 
-        return flashcards
+        i += 1
+
+    return flashcards

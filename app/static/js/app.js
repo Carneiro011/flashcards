@@ -192,27 +192,11 @@ function escapeHTML(str) {
 }
 
 
-// ===========================
-// FUNÇÃO PRINCIPAL: ASYNC/AWAIT
-// ===========================
 
-/**
- * Orquestra todo o fluxo de geração de flashcards.
- * 
- * ASYNC/AWAIT explicado:
- * - `async function` declara que a função é assíncrona
- * - `await` pausa a execução da função até a Promise resolver
- * - Enquanto espera, o browser NÃO trava (RNF01 atendido)
- * - Outros eventos (scroll, cliques) continuam funcionando
- * 
- * Sem async/await, precisaríamos de:
- *   fetch(url)
- *     .then(res => res.json())
- *     .then(data => { ... })
- *     .catch(err => { ... })
- * 
- * Com async/await, fica muito mais legível e fácil de manter.
- */
+// FUNÇÃO PRINCIPAL: ASYNC/AWAIT
+
+// * Orquestra todo o fluxo de geração de flashcards.
+ 
 async function gerarFlashcards() {
   const texto = document.getElementById("texto").value.trim();
   const usarIA = document.getElementById("usar-ia").checked;
@@ -310,19 +294,3 @@ function resetar() {
   // Foca no textarea para UX fluida
   document.getElementById("texto").focus();
 }
-/*
-8. Boas Práticas Aplicadas
-
-Separação de Responsabilidades (SRP)
-
-flashcard_controller.py → controller
-text_processor.py → regras
-ai_service.py → API
-flashcard.py → modelo
-app.js → UI
-style.css → visual
-
-Validação:
-Frontend (JS) → UX
-Backend (Python) → segurança
-*/

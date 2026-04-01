@@ -1,10 +1,10 @@
-# run.py
-
+import os
 from app import create_app
 
-app = create_app("development")
+app = create_app(os.getenv("FLASK_ENV", "development"))
 
 if __name__ == "__main__":
-    # debug=True: recarrega automaticamente ao salvar arquivos
-    # NÃO use debug=True em produção
-    app.run(debug=True, port=5000)
+    app.run(
+        port=int(os.getenv("PORT", 5000)),
+        debug=os.getenv("FLASK_DEBUG", "true") == "true"
+    )

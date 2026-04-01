@@ -347,7 +347,7 @@ body {
    - Quando .is-flipped, o cartão gira 180° no eixo Y
    =========================== */
 .flashcard-wrapper {
-  perspective: 1000px;     /* Distância do observador — cria efeito de profundidade */
+  perspective: 1000px;     /* efeito de profundidade */
   height: 260px;
   cursor: pointer;
 }
